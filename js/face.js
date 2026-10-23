@@ -40,9 +40,20 @@
         faceapi.nets.faceLandmark68TinyNet.loadFromUri(url),
         faceapi.nets.faceRecognitionNet.loadFromUri(url)
       ]);
-    });
+    }).then(warmUp);
     loading.catch(function () { loading = null; });
     return loading;
+  }
+
+  /* The first inference compiles GPU shaders and takes 1-2 s on a phone. Do it now, on blank
+     canvases, while the camera is still starting, so the first real frame is already fast. */
+  function warmUp() {
+    var c1 = document.createElement('canvas'); c1.width = 224; c1.height = 224;
+    var c2 = document.createElement('canvas'); c2.width = 150; c2.height = 150;
+    var o = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+    return faceapi.detectSingleFace(c1, o).withFaceLandmarks(true)
+      .then(function () { return faceapi.nets.faceRecognitionNet.computeFaceDescriptor(c2); })
+      .catch(function () {});
   }
 
   var opts = null;
@@ -82,10 +93,13 @@
   window.GWFace = {
     load: load,
 
-    async startCamera(video) {
+    /* size: scanning needs far fewer pixels than registering (the detector runs at 224 px),
+       and a smaller stream starts faster on most phones. */
+    async startCamera(video, size) {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no-camera-api');
+      var s = size || { width: 640, height: 480 };
       var stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        video: { facingMode: 'user', width: { ideal: s.width }, height: { ideal: s.height }, frameRate: { ideal: 24, max: 30 } },
         audio: false
       });
       video.srcObject = stream;

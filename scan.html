@@ -93,9 +93,11 @@
     $('sweep').hidden = false;
     setState('กำลังเปิดกล้อง', 15);
     // camera, model files and the shared employee list all start at the same time
-    var cam = GWFace.startCamera($('video'));
+    var cam = GWFace.startCamera($('video'), { width: 480, height: 360 });
     var models = GWFace.load();
-    var people = GW.pullEmployees();
+    // Use the employee list already on this phone. Only wait for the shared sheet the very first time.
+    var fresh = GW.pullEmployees();
+    var people = GW.employees().length ? Promise.resolve() : fresh;
     cam.then(function (s) {
       if (my !== token) { GWFace.stop(s); return; }
       stream = s;
