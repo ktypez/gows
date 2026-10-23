@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B1220">
+<title>แบบทดสอบพนักงาน | Go Wholesale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="index.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>เมนูหลัก</a>
+  <div class="head"><h1>แบบทดสอบพนักงาน</h1><p class="sub">คะแนนบันทึกเข้าข้อมูลสาขาอัตโนมัติเมื่อเชื่อมฐานข้อมูลกลาง · แก้ข้อสอบใน js/data.js</p></div>
+
+  <section id="v-start" class="stack" style="gap:14px">
+    <div class="field"><label for="who">ผู้เข้าสอบ</label><select id="who"></select></div>
+    <p id="none" class="sub" hidden>ยังไม่มีพนักงานในเครื่องนี้ <a href="register.html" style="text-decoration:underline">ลงทะเบียนก่อน</a></p>
+    <div class="card stack" id="hist-box" hidden><h2>ประวัติการสอบ</h2><div id="hist" class="stack" style="gap:6px"></div></div>
+    <button type="button" class="btn primary" id="start" disabled>เริ่มทำแบบทดสอบ</button>
+  </section>
+
+  <section id="v-q" class="stack" hidden style="gap:16px;flex:1">
+    <div class="stack" style="gap:8px">
+      <div style="display:flex;justify-content:space-between;font-size:14px"><span id="qn" style="color:var(--fg-2)"></span><span class="sub" id="qa"></span></div>
+      <div class="progress"><i id="qp"></i></div>
+    </div>
+    <div class="card"><h2 id="qt" style="font-size:19px;line-height:1.5"></h2></div>
+    <div class="stack" id="opts" style="gap:10px"></div>
+    <p id="why" class="sub" hidden></p>
+    <button type="button" class="btn primary spacer" id="next" disabled>ข้อถัดไป</button>
+  </section>
+
+  <section id="v-r" class="stack" hidden style="gap:16px;flex:1">
+    <div class="card stack" style="align-items:center;text-align:center;gap:6px;padding:24px 16px">
+      <div class="sub">คะแนนของ <span id="r-name"></span></div>
+      <div style="font-size:48px;font-weight:700;line-height:1.1" class="num"><span id="r-score"></span></div>
+      <span class="pill" id="r-pill"></span>
+    </div>
+    <div class="stack" id="r-wrong" style="gap:10px"></div>
+    <div class="spacer stack" style="gap:10px"><button type="button" class="btn primary" id="again">ทำอีกครั้ง</button></div>
+  </section>
+</main>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+(function () {
+  var $ = GW.el, Q = GW_DATA.quiz, PASS = 0.8, who = '', i = 0, ans = [], picked = -1, answered = false;
+  function show(v) { ['v-start', 'v-q', 'v-r'].forEach(function (x) { $(x).hidden = x !== v; }); window.scrollTo(0, 0); }
+  function history() { return GW.store.get('quiz', []); }
+
+  function drawStart() {
+    var emps = GW.employees();
+    $('who').innerHTML = emps.map(function (e) { return '<option>' + GW.esc(e.name) + '</option>'; }).join('');
+    $('none').hidden = emps.length > 0; $('start').disabled = !emps.length;
+    var h = history().filter(function (x) { return x.name === $('who').value; }).slice(-5).reverse();
+    $('hist-box').hidden = !h.length;
+    $('hist').innerHTML = h.map(function (x) { return '<div style="display:flex;justify-content:space-between;font-size:15px"><span>' + GW.esc(x.date) + '</span><b class="num">' + x.score + '/' + x.total + ' · ' + (x.pass ? 'ผ่าน' : 'ไม่ผ่าน') + '</b></div>'; }).join('');
+    show('v-start');
+  }
+  $('who').addEventListener('change', drawStart);
+  $('who').addEventListener('change', function () { who = $('who').value; });
+
+  function ask() {
+    var q = Q[i]; picked = -1; answered = false;
+    $('qn').textContent = 'ข้อ ' + (i + 1) + ' จาก ' + Q.length;
+    $('qa').textContent = 'ตอบแล้ว ' + ans.length + ' ข้อ';
+    $('qp').style.width = (i / Q.length * 100) + '%';
+    $('qt').textContent = q.q;
+    $('opts').innerHTML = q.o.map(function (o, k) { return '<button type="button" class="opt" aria-pressed="false" data-k="' + k + '"><span class="dot"></span><span>' + GW.esc(o) + '</span></button>'; }).join('');
+    $('why').hidden = true;
+    $('next').disabled = true;
+    $('next').textContent = i === Q.length - 1 ? 'ส่งคำตอบและดูคะแนน' : 'ข้อถัดไป';
+  }
+  $('opts').addEventListener('click', function (e) {
+    var b = e.target.closest('.opt'); if (!b || answered) return;
+    picked = +b.getAttribute('data-k');
+    Array.prototype.forEach.call($('opts').children, function (c, k) { c.setAttribute('aria-pressed', k === picked); });
+    $('next').disabled = false;
+  });
+  $('next').onclick = function () {
+    if (picked < 0) return;
+    ans.push(picked);
+    if (i < Q.length - 1) { i++; ask(); return; }
+    finish();
+  };
+  function finish() {
+    var score = Q.filter(function (q, k) { return ans[k] === q.a; }).length;
+    var pass = score / Q.length >= PASS;
+    var entry = { name: who, score: score, total: Q.length, pass: pass, date: new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) };
+    var h = history(); h.push(entry); GW.store.set('quiz', h);
+    var c = GW.config();
+    if (c.apiUrl) { try { fetch(c.apiUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: c.token || '', kind: 'quiz', data: entry }) }).catch(function () {}); } catch (e) {} }
+    $('r-name').textContent = who;
+    $('r-score').textContent = score + '/' + Q.length;
+    $('r-pill').textContent = pass ? 'ผ่านเกณฑ์' : 'ยังไม่ผ่าน ต้องได้ ' + Math.ceil(PASS * Q.length) + ' ข้อขึ้นไป';
+    $('r-pill').className = 'pill ' + (pass ? 't-teal' : 't-amber');
+    var wrong = Q.map(function (q, k) { return { q: q, k: k }; }).filter(function (x) { return ans[x.k] !== x.q.a; });
+    $('r-wrong').innerHTML = wrong.length ? '<h2>ข้อที่ตอบผิด</h2>' + wrong.map(function (x) {
+      return '<div class="card stack" style="gap:6px"><b style="font-weight:600;line-height:1.45">' + GW.esc(x.q.q) + '</b><span class="err">คุณตอบ: ' + GW.esc(x.q.o[ans[x.k]]) + '</span><span style="color:var(--accent-text)">เฉลย: ' + GW.esc(x.q.o[x.q.a]) + '</span><span class="sub">' + GW.esc(x.q.why) + '</span></div>';
+    }).join('') : '<div class="empty">ตอบถูกทุกข้อ</div>';
+    show('v-r');
+  }
+  $('start').onclick = function () { who = $('who').value; i = 0; ans = []; show('v-q'); ask(); };
+  $('again').onclick = drawStart;
+  drawStart(); who = $('who').value;
+})();
+</script>
+</body>
+</html>

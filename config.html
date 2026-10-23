@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B1220">
+<title>ตั้งค่าระบบ | Go Wholesale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="index.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>เมนูหลัก</a>
+
+  <section id="v-lock" class="stack" style="gap:20px;flex:1;justify-content:center;padding-bottom:64px">
+    <div class="stack" style="gap:8px">
+      <div class="ico" style="width:56px;height:56px;border-radius:16px"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></div>
+      <h1>สำหรับผู้ดูแลระบบ</h1>
+      <p class="sub" id="lock-msg" style="font-size:15px"></p>
+    </div>
+    <div class="field"><label for="pin" id="pin-l">รหัสผ่าน</label><input id="pin" type="password" autocomplete="off"></div>
+    <p id="pin-err" class="err" role="alert" hidden></p>
+    <button type="button" class="btn primary" id="unlock">ปลดล็อก</button>
+  </section>
+
+  <section id="v-cfg" class="stack" hidden style="gap:16px;flex:1">
+    <h1>ตั้งค่าระบบผู้ดูแล</h1>
+    <div class="card stack" style="gap:12px">
+      <h2>ฐานข้อมูลกลาง (Google Apps Script)</h2>
+      <p class="sub">ใช้ให้ทุกเครื่องเห็นพนักงานและใบหน้าชุดเดียวกัน ดูวิธีตั้งใน README</p>
+      <div class="field"><label for="c-url">Web app URL</label><input id="c-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec"></div>
+      <div class="field"><label for="c-token">รหัสลับ (token)</label><input id="c-token" type="password" autocomplete="off"></div>
+    </div>
+    <div class="card stack" style="gap:12px">
+      <h2>พิกัด GPS สาขา</h2>
+      <button type="button" class="btn" id="geo">ใช้ตำแหน่งปัจจุบันของฉัน</button>
+      <div class="grid2">
+        <div class="field"><label for="c-lat">ละติจูด</label><input id="c-lat" type="text" inputmode="decimal"></div>
+        <div class="field"><label for="c-lng">ลองจิจูด</label><input id="c-lng" type="text" inputmode="decimal"></div>
+      </div>
+      <div class="field"><label for="c-rad">รัศมีที่อนุญาตให้สแกน (กม.)</label><input id="c-rad" type="text" inputmode="decimal"></div>
+      <p class="sub">ใส่ 0 เพื่อปิดการตรวจ GPS</p>
+    </div>
+    <div class="card stack" style="gap:10px">
+      <h2>ข้อมูลตัวอย่าง</h2>
+      <p class="sub">เพิ่มพนักงานและสถานะตัวอย่างเพื่อดูหน้า Dashboard ลบออกได้ทุกเมื่อ</p>
+      <div class="grid2"><button type="button" class="btn" id="demo-on">เพิ่มตัวอย่าง</button><button type="button" class="btn" id="demo-off">ลบตัวอย่าง</button></div>
+    </div>
+    <p class="sub">รหัสผ่านหน้านี้ล็อกเฉพาะเครื่องนี้ ไม่ใช่การป้องกันฝั่งเซิร์ฟเวอร์ ความลับจริงอยู่ที่ token ของฐานข้อมูลกลาง</p>
+    <button type="button" class="btn primary spacer" id="save">บันทึกการตั้งค่า</button>
+  </section>
+</main>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+(function () {
+  var $ = GW.el, hash = GW.store.get('pin', null);
+  function sha(s) {
+    if (!(window.crypto && crypto.subtle)) return Promise.resolve('plain:' + s);
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode('gw:' + s)).then(function (b) {
+      return Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+    });
+  }
+  function err(m) { $('pin-err').textContent = m; $('pin-err').hidden = !m; }
+  $('lock-msg').textContent = hash ? 'ใส่รหัสผ่านเพื่อเข้าสู่การตั้งค่า' : 'ครั้งแรก: ตั้งรหัสผ่านอย่างน้อย 4 ตัวอักษร';
+  $('pin-l').textContent = hash ? 'รหัสผ่าน' : 'ตั้งรหัสผ่านใหม่';
+  $('unlock').textContent = hash ? 'ปลดล็อก' : 'ตั้งรหัสและเข้าใช้งาน';
+
+  $('unlock').onclick = function () {
+    var v = $('pin').value; err('');
+    if (!hash && v.length < 4) return err('รหัสผ่านต้องยาวอย่างน้อย 4 ตัวอักษร');
+    sha(v).then(function (h) {
+      if (!hash) { GW.store.set('pin', h); hash = h; return open(); }
+      if (h === hash) return open();
+      err('รหัสผ่านไม่ถูกต้อง');
+    });
+  };
+  $('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('unlock').click(); });
+
+  function open() {
+    var c = GW.config();
+    $('c-url').value = c.apiUrl || ''; $('c-token').value = c.token || '';
+    $('c-lat').value = c.lat; $('c-lng').value = c.lng; $('c-rad').value = c.radius;
+    $('v-lock').hidden = true; $('v-cfg').hidden = false;
+  }
+  $('geo').onclick = function () {
+    if (!navigator.geolocation) return GW.toast('อุปกรณ์นี้ไม่รองรับตำแหน่งที่ตั้ง');
+    navigator.geolocation.getCurrentPosition(function (p) {
+      $('c-lat').value = p.coords.latitude.toFixed(6); $('c-lng').value = p.coords.longitude.toFixed(6);
+    }, function () { GW.toast('เปิดการเข้าถึงตำแหน่งที่ตั้งก่อน'); }, { timeout: 10000 });
+  };
+  $('save').onclick = function () {
+    var url = $('c-url').value.trim();
+    if (url && !/^https:\/\//.test(url)) return GW.toast('URL ต้องขึ้นต้นด้วย https://');
+    GW.store.set('config', { apiUrl: url, token: $('c-token').value, lat: $('c-lat').value.trim(), lng: $('c-lng').value.trim(), radius: $('c-rad').value.trim() });
+    GW.toast('บันทึกการตั้งค่าแล้ว');
+  };
+  $('demo-on').onclick = function () { GW.loadDemo(); GW.toast('เพิ่มข้อมูลตัวอย่างแล้ว'); };
+  $('demo-off').onclick = function () { GW.clearDemo(); GW.toast('ลบข้อมูลตัวอย่างแล้ว'); };
+})();
+</script>
+</body>
+</html>

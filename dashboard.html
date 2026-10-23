@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B1220">
+<title>Live Dashboard | Go Wholesale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="index.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>เมนูหลัก</a>
+  <div class="head">
+    <h1>Live Dashboard</h1>
+    <p class="sub"><span id="meta"></span> <span id="demo" class="badge-demo" hidden>ข้อมูลตัวอย่าง</span></p>
+  </div>
+  <div class="grid2" id="counts"></div>
+  <div class="stack" style="gap:8px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><h2>พนักงานวันนี้</h2><span class="sub">เวลางานรวม (ชม:นาที)</span></div>
+    <div class="list" id="rows"></div>
+  </div>
+  <button type="button" class="btn spacer" id="csv">ดาวน์โหลดรายงาน CSV</button>
+</main>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+(function () {
+  var $ = GW.el;
+  function render() {
+    var rows = GW.board().sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+    var order = ['branch', 'out', 'lunch', 'end'];
+    $('counts').innerHTML = order.map(function (id) {
+      var s = GW.status(id);
+      var n = rows.filter(function (r) { return r.status === id; }).length;
+      return '<div class="stat"><b class="num pill ' + s.tone + '" style="font-size:24px;padding:2px 12px">' + n + '</b><span>' + GW.esc(s.list) + '</span></div>';
+    }).join('');
+    $('rows').innerHTML = rows.length ? rows.map(function (r) {
+      var s = GW.status(r.status);
+      return '<div class="emp"><div class="nm"><b>' + GW.esc(r.name) + '</b><small>' + GW.esc(r.plate) + '</small></div>' +
+        '<span class="pill ' + s.tone + '">' + GW.esc(s.list) + '</span><span class="tm num">' + GW.fmtMinutes(r.minutes) + '</span></div>';
+    }).join('') : '<div class="empty">ยังไม่มีใครสแกนวันนี้</div>';
+    var d = new Date();
+    $('meta').textContent = 'รถวิ่งงานวันนี้ ' + rows.length + ' คัน · อัปเดต ' + GW.hhmm(d.toISOString()) + ' น.';
+    $('demo').hidden = !(rows.length && rows.every(function (r) { return r.demo; }));
+    window._rows = rows;
+  }
+  $('csv').onclick = function () {
+    var head = ['ชื่อ', 'ทะเบียน', 'สถานะล่าสุด', 'เวลาล่าสุด', 'เวลางานรวม'];
+    var lines = [head].concat((window._rows || []).map(function (r) {
+      return [r.name, r.plate, GW.status(r.status).label, GW.hhmm(r.at), GW.fmtMinutes(r.minutes)];
+    })).map(function (l) { return l.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); });
+    var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'report-' + GW.dayKey() + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  };
+  render();
+  setInterval(render, 30000);
+})();
+</script>
+</body>
+</html>

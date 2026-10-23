@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B1220">
+<title>คลังความรู้ | Go Wholesale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="index.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>เมนูหลัก</a>
+  <div class="head"><h1>คลังความรู้</h1><p class="sub">คู่มือ วิดีโอสอนงาน และความปลอดภัย · แก้เนื้อหาในไฟล์ js/data.js</p></div>
+  <div class="card stack" style="gap:8px">
+    <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:var(--fg-2)">อ่านแล้ว</span><b class="num" id="prog-t"></b></div>
+    <div class="progress"><i id="prog"></i></div>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="กรองหมวด"></div>
+  <div class="stack" id="items" style="gap:10px"></div>
+</main>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+(function () {
+  var $ = GW.el, cur = 'ทั้งหมด', cats = ['ทั้งหมด', 'คู่มือ', 'วิดีโอ', 'ความปลอดภัย'];
+  var ICON = { 'คู่มือ': 'M5 4h13v16H7a2 2 0 01-2-2zM5 18a2 2 0 012-2h11', 'วิดีโอ': 'M8 5v14l11-7z', 'ความปลอดภัย': 'M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z' };
+  var read = GW.store.get('read', {});
+  function prog() {
+    var n = GW_DATA.lessons.filter(function (l) { return read[l.title]; }).length, t = GW_DATA.lessons.length;
+    $('prog-t').textContent = n + ' จาก ' + t + ' บทเรียน';
+    $('prog').style.width = (t ? n / t * 100 : 0) + '%';
+  }
+  function draw() {
+    $('chips').innerHTML = cats.map(function (c) { return '<button type="button" class="chip" aria-pressed="' + (c === cur) + '" data-c="' + c + '">' + c + '</button>'; }).join('');
+    $('items').innerHTML = GW_DATA.lessons.map(function (l, i) { return { l: l, i: i }; }).filter(function (x) { return cur === 'ทั้งหมด' || x.l.cat === cur; }).map(function (x) {
+      var l = x.l;
+      return '<details class="lesson" data-t="' + GW.esc(l.title) + '"><summary><span class="ico"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="' + ICON[l.cat] + '"/></svg></span>' +
+        '<span style="flex:1;min-width:0"><b style="display:block;font-weight:600;line-height:1.35">' + GW.esc(l.title) + '</b><span class="sub">' + GW.esc(l.meta) + '</span></span>' +
+        (read[l.title] ? '<span class="pill t-teal">อ่านแล้ว</span>' : '') + '</summary><div class="body">' + GW.esc(l.body) + '</div></details>';
+    }).join('');
+    prog();
+  }
+  $('chips').addEventListener('click', function (e) { var c = e.target.getAttribute('data-c'); if (c) { cur = c; draw(); } });
+  $('items').addEventListener('toggle', function (e) {
+    var d = e.target, t = d.getAttribute && d.getAttribute('data-t');
+    if (t && d.open && !read[t]) { read[t] = 1; GW.store.set('read', read); prog(); var s = d.querySelector('summary'); if (!s.querySelector('.pill')) s.insertAdjacentHTML('beforeend', '<span class="pill t-teal">อ่านแล้ว</span>'); }
+  }, true);
+  draw();
+})();
+</script>
+</body>
+</html>

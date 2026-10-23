@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B1220">
+<title>สแกนอัปเดตสถานะ | Go Wholesale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="index.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>เมนูหลัก</a>
+
+  <!-- 1. scan -->
+  <section id="v-scan" class="stack" style="gap:18px">
+    <div class="head">
+      <h1>สแกนใบหน้า</h1>
+      <p id="scan-hint" class="sub" style="font-size:16px">มองกล้อง ระบบยืนยันตัวตนให้อัตโนมัติ</p>
+    </div>
+    <div class="camera" id="cam">
+      <video id="video" playsinline muted></video>
+      <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="28" ry="36" fill="none" stroke="#2DD4BF" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" style="stroke-width:3"/></svg>
+      <div class="sweepline" id="sweep"></div>
+      <div class="cap" id="cap">กำลังเปิดกล้อง…</div>
+    </div>
+    <div class="stack" style="gap:10px">
+      <div style="display:flex;align-items:center;gap:10px"><span id="dot" style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></span><span id="state">กำลังเปิดกล้อง</span></div>
+      <div class="progress"><i id="bar" style="width:15%"></i></div>
+      <p class="sub">ภาพจากกล้องถูกประมวลผลในเครื่องของคุณ ไม่ถูกอัปโหลด</p>
+    </div>
+    <div id="fallback" hidden class="stack">
+      <p class="err" id="fb-msg">เปิดกล้องไม่ได้ เลือกชื่อของคุณแทน</p>
+      <div id="fb-list" class="stack" style="gap:8px"></div>
+    </div>
+  </section>
+
+  <!-- 2. matched -->
+  <section id="v-match" class="stack" hidden style="gap:20px;flex:1">
+    <div class="who">
+      <div class="avatar" id="m-av">ส</div>
+      <div style="min-width:0">
+        <div class="sub">ยืนยันตัวตนแล้ว</div>
+        <div id="m-name" style="font-size:20px;font-weight:600;line-height:1.3;overflow-wrap:anywhere"></div>
+        <div id="m-last" class="sub"></div>
+      </div>
+    </div>
+    <div class="stack" style="gap:8px">
+      <div class="sub">ขั้นตอนถัดไปของคุณ</div>
+      <button type="button" class="next-btn" id="m-next"><span id="m-next-ico"></span><span><strong id="m-next-label"></strong><small>แตะครั้งเดียว บันทึกทันที</small></span></button>
+    </div>
+    <div class="stack" style="gap:8px">
+      <div class="sub">หรือเลือกสถานะอื่น</div>
+      <div class="grid2" id="m-others"></div>
+    </div>
+    <p id="m-err" class="err" role="alert" hidden></p>
+    <div class="spacer" style="display:flex;justify-content:center"><button type="button" class="btn link" id="m-retry">ไม่ใช่ฉัน สแกนใหม่</button></div>
+  </section>
+
+  <!-- 3. done -->
+  <section id="v-done" class="stack" hidden style="gap:20px;flex:1;text-align:center;padding-top:32px">
+    <div class="okmark pop"><svg aria-hidden="true" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <div class="head"><h1>บันทึกแล้ว</h1><p id="d-name" style="font-size:17px;color:var(--fg-2)"></p></div>
+    <div class="card stack" style="text-align:left;gap:4px">
+      <div class="sub">สถานะ</div>
+      <div id="d-status" style="font-size:22px;font-weight:600;line-height:1.3"></div>
+      <div id="d-time" class="sub num"></div>
+    </div>
+    <div class="spacer stack" style="gap:10px">
+      <button type="button" class="btn primary" id="d-again">สแกนคนถัดไป</button>
+      <button type="button" class="btn" id="d-undo">เลือกสถานะใหม่</button>
+    </div>
+  </section>
+</main>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script src="js/face.js"></script>
+<script>
+(function () {
+  var $ = GW.el, stream = null, who = null, lastEntry = null, token = 0;
+  var ICON = '<svg aria-hidden="true" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h12v10H2zM14 9h4l3 3v4h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/></svg>';
+
+  function show(id) { ['v-scan', 'v-match', 'v-done'].forEach(function (v) { $(v).hidden = v !== id; }); window.scrollTo(0, 0); }
+  function setState(text, pct) { $('state').textContent = text; $('cap').textContent = text; $('bar').style.width = pct + '%'; }
+
+  function startScan() {
+    var my = ++token;
+    show('v-scan');
+    $('fallback').hidden = true;
+    $('sweep').hidden = false;
+    setState('กำลังเปิดกล้อง', 15);
+    // camera, model files and the shared employee list all start at the same time
+    var cam = GWFace.startCamera($('video'));
+    var models = GWFace.load();
+    var people = GW.pullEmployees();
+    cam.then(function (s) {
+      if (my !== token) { GWFace.stop(s); return; }
+      stream = s;
+      setState('กำลังโหลดระบบจดจำใบหน้า', 30);
+      return Promise.all([models, people]).then(function () {
+        return GWFace.recognize($('video'), GW.employees(), function (t, p) { if (my === token) setState(t, p); }, function () { return my !== token; });
+      }).then(function (res) {
+        if (my !== token) return;
+        GWFace.stop(stream); stream = null;
+        if (res.employee) { setState('ยืนยันตัวตนแล้ว', 100); matched(res.employee); return; }
+        if (res.reason === 'nobody') showFallback('ยังไม่มีใครลงทะเบียนใบหน้าในเครื่องนี้ เลือกชื่อของคุณแทน หรือลงทะเบียนก่อน');
+        else showFallback('ยืนยันใบหน้าไม่สำเร็จ ลองสแกนใหม่ หรือเลือกชื่อของคุณแทน');
+      });
+    }).catch(function (err) {
+      if (my !== token) return;
+      GWFace.stop(stream); stream = null;
+      showFallback(models && err && err.message === 'script-load'
+        ? 'โหลดระบบจดจำใบหน้าไม่สำเร็จ เลือกชื่อของคุณแทน'
+        : 'เปิดกล้องไม่ได้ เลือกชื่อของคุณแทน');
+    });
+  }
+
+  function showFallback(msg) {
+    $('sweep').hidden = true;
+    setState('เลือกชื่อแทนการสแกน', 100);
+    $('fb-msg').textContent = msg;
+    var box = $('fb-list'); box.innerHTML = '';
+    var retry = document.createElement('button');
+    retry.type = 'button'; retry.className = 'btn primary'; retry.textContent = 'สแกนใหม่';
+    retry.onclick = startScan;
+    box.appendChild(retry);
+    GW.employees().forEach(function (e) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn'; b.style.justifyContent = 'flex-start'; b.textContent = e.name;
+      b.onclick = function () { matched(e); };
+      box.appendChild(b);
+    });
+    $('fallback').hidden = false;
+  }
+
+  function matched(emp) {
+    who = emp;
+    lastEntry = GW.lastEntry(emp.name);
+    var last = lastEntry ? GW.status(lastEntry.status) : null;
+    var nextId = last ? GW.NEXT[last.id] : 'branch';
+    $('m-av').textContent = emp.name.charAt(0);
+    $('m-name').textContent = emp.name;
+    $('m-last').textContent = last ? 'ล่าสุด: ' + last.label + ' ' + GW.hhmm(lastEntry.at) : 'ยังไม่มีบันทึกวันนี้';
+    var next = GW.status(nextId);
+    $('m-next-label').textContent = next.label;
+    $('m-next-ico').innerHTML = ICON;
+    $('m-next').onclick = function () { save(nextId); };
+    var box = $('m-others'); box.innerHTML = '';
+    GW.STATUSES.filter(function (s) { return s.id !== nextId; }).forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn'; b.style.cssText = 'min-height:64px;justify-content:flex-start;text-align:left;border-radius:18px';
+      b.textContent = s.label;
+      b.onclick = function () { save(s.id); };
+      box.appendChild(b);
+    });
+    $('m-err').hidden = true;
+    show('v-match');
+  }
+
+  var saved = null, saving = false;
+  function save(statusId) {
+    if (saving) return;
+    saving = true;
+    $('m-err').hidden = true;
+    GW.checkGeofence().then(function (r) {
+      saving = false;
+      if (!r.ok) { $('m-err').textContent = r.msg; $('m-err').hidden = false; return; }
+      saved = GW.addLog(who.name, statusId);
+      $('d-name').textContent = who.name;
+      $('d-status').textContent = GW.status(statusId).label;
+      var d = new Date(saved.at);
+      $('d-time').textContent = GW.hhmm(saved.at) + ' น. · ' + d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+      show('v-done');
+    });
+  }
+
+  $('m-retry').onclick = startScan;
+  $('d-again').onclick = startScan;
+  $('d-undo').onclick = function () { if (saved) GW.removeLog(saved.id); matched(who); };
+  window.addEventListener('pagehide', function () { GWFace.stop(stream); });
+  startScan();
+})();
+</script>
+</body>
+</html>
